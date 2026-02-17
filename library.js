@@ -72,7 +72,7 @@ plugin.init = async function (params) {
 	} else {
 		hook = null;
 		if (webhookURL) {
-			winston.warn('[discord-notification] Invalid webhook URL format. Notifications will not be sent. URL: ' + webhookURL.substring(0, 50) + '...');
+			winston.warn('[discord-notification] Invalid webhook URL format. Notifications will not be sent. URL: ' + webhookURL.substring(0, 50) + (webhookURL.length > 50 ? '...' : ''));
 		} else {
 			winston.info('[discord-notification] No webhook URL configured. Notifications disabled.');
 		}
@@ -110,6 +110,7 @@ plugin.postSave = async function (data) {
 		}
 
 		// Empty array or null/undefined means "all categories"
+		// Skip only if specific categories are configured and this post's category is not among them
 		if (Array.isArray(postCategories) && postCategories.length > 0 && postCategories.indexOf(String(post.cid)) < 0) {
 			winston.verbose('[discord-notification] postSave: Category ' + post.cid + ' not in allowed list, skipping.');
 			return;
