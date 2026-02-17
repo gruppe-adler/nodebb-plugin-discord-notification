@@ -1,123 +1,109 @@
-(function(module) {
-	'use strict';
+'use strict';
 
-	var User = require.main.require('./src/user');
-	var Topics = require.main.require('./src/topics');
-	var Categories = require.main.require('./src/categories');
-	var translator = require.main.require('./src/translator');
-	var meta = require.main.require('./src/meta');
-	var nconf = require.main.require('nconf');
-	var async = require.main.require('async');
+const user = require.main.require('./src/user');
+const topics = require.main.require('./src/topics');
+const categories = require.main.require('./src/categories');
+const meta = require.main.require('./src/meta');
+const nconf = require.main.require('nconf');
+const routeHelpers = require.main.require('./src/routes/helpers');
 
-	var Discord = require('discord.js');
+const { WebhookClient, EmbedBuilder } = require('discord.js');
 
-	var hook = null;
-	var forumURL = nconf.get('url');
+let hook = null;
+const forumURL = nconf.get('url');
 
-	var plugin = {
-			config: {
-				webhookURL: '',
-				maxLength: '',
-				postCategories: '',
-				topicsOnly: '',
-				messageContent: ''
-			},
-			regex: /https:\/\/discord(?:app)?\.com\/api\/webhooks\/([0-9]+?)\/(.+?)$/
-		};
+const plugin = module.exports;
 
-	plugin.init = function(params, callback) {
-		function render(req, res, next) {
-			res.render('admin/plugins/discord-notification', {});
+plugin.config = {
+	webhookURL: '',
+	maxLength: '',
+	postCategories: '',
+	topicsOnly: '',
+	messageContent: '',
+};
+
+plugin.regex = /https:\/\/discord(?:app)?\.com\/api\/webhooks\/([0-9]+?)\/(.+?)$/;
+
+plugin.init = async function (params) {
+	routeHelpers.setupAdminPageRoute(params.router, '/admin/plugins/discord-notification', function (req, res) {
+		res.render('admin/plugins/discord-notification', {});
+	});
+
+	const settings = await meta.settings.get('discord-notification');
+	for (const prop in plugin.config) {
+		if (settings.hasOwnProperty(prop)) {
+			plugin.config[prop] = settings[prop];
+		}
+	}
+
+	// Parse Webhook URL (1: ID, 2: Token)
+	const match = plugin.config.webhookURL.match(plugin.regex);
+
+	if (match) {
+		hook = new WebhookClient({ id: match[1], token: match[2] });
+	}
+};
+
+plugin.postSave = async function (post) {
+	post = post.post;
+	const topicsOnly = plugin.config.topicsOnly || 'off';
+
+	if (topicsOnly === 'off' || (topicsOnly === 'on' && post.isMain)) {
+		let content = post.content;
+
+		const [userData, topicData, categoryData] = await Promise.all([
+			user.getUserFields(post.uid, ['username', 'picture']),
+			topics.getTopicFields(post.tid, ['title', 'slug']),
+			categories.getCategoryFields(post.cid, ['name', 'bgColor']),
+		]);
+
+		let postCategories;
+		try {
+			postCategories = JSON.parse(plugin.config.postCategories);
+		} catch (e) {
+			postCategories = null;
 		}
 
-		params.router.get('/admin/plugins/discord-notification', params.middleware.admin.buildHeader, render);
-		params.router.get('/api/admin/plugins/discord-notification', render);
+		if (!postCategories || postCategories.indexOf(String(post.cid)) >= 0) {
+			// Trim long posts:
+			const maxQuoteLength = plugin.config.maxLength || 1024;
+			if (content.length > maxQuoteLength) { content = content.substring(0, maxQuoteLength) + '...'; }
 
-		meta.settings.get('discord-notification', function(err, settings) {
-			for (var prop in plugin.config) {
-				if (settings.hasOwnProperty(prop)) {
-					plugin.config[prop] = settings[prop];
-				}
+			// Ensure absolute thumbnail URL if an avatar exists:
+			let thumbnail = null;
+
+			if (userData.picture && userData.picture.match(/^\//)) {
+				thumbnail = forumURL + userData.picture;
+			} else if (userData.picture) {
+				thumbnail = userData.picture;
 			}
 
-			// Parse Webhook URL (1: ID, 2: Token)
-			var match = plugin.config['webhookURL'].match(plugin.regex);
+			// Add custom message:
+			const messageContent = plugin.config.messageContent || '';
 
-			if (match) {
-				hook = new Discord.WebhookClient(match[1], match[2]);
+			// Make the rich embed:
+			const embed = new EmbedBuilder()
+				.setColor(categoryData.bgColor)
+				.setURL(forumURL + '/topic/' + topicData.slug)
+				.setTitle(categoryData.name + ': ' + topicData.title)
+				.setDescription(content)
+				.setFooter({ text: userData.username, iconURL: thumbnail })
+				.setTimestamp();
+
+			// Send notification:
+			if (hook) {
+				hook.send({ content: messageContent || undefined, embeds: [embed] }).catch(console.error);
 			}
-		});
-
-		callback();
-	},
-
-	plugin.postSave = function(post) {
-		post = post.post;
-		var topicsOnly = plugin.config['topicsOnly'] || 'off';
-
-		if (topicsOnly === 'off' || (topicsOnly === 'on' && post.isMain)) {
-			var content = post.content;
-
-			async.parallel({
-				user: function(callback) {
-					User.getUserFields(post.uid, ['username', 'picture'], callback);
-				},
-				topic: function(callback) {
-					Topics.getTopicFields(post.tid, ['title', 'slug'], callback);
-				},
-				category: function(callback) {
-					Categories.getCategoryFields(post.cid, ['name', 'bgColor'], callback);
-				}
-			}, function(err, data) {
-				var categories = JSON.parse(plugin.config['postCategories']);
-
-				if (!categories || categories.indexOf(String(post.cid)) >= 0) {
-					// Trim long posts:
-					var maxQuoteLength = plugin.config['maxLength'] || 1024;
-					if (content.length > maxQuoteLength) { content = content.substring(0, maxQuoteLength) + '...'; }
-
-					// Ensure absolute thumbnail URL if an avatar exists:
-					var thumbnail = null;
-
-					if (data.user.picture && data.user.picture.match(/^\//)) {
-						thumbnail = forumURL + data.user.picture;
-					} else if (data.user.picture) {
-						thumbnail = data.user.picture;
-					}
-
-					// Add custom message:
-					var messageContent = plugin.config['messageContent'] || '';
-
-					// Make the rich embed:
-					var embed = new Discord.MessageEmbed()
-						.setColor(data.category.bgColor)
-						.setURL(forumURL + '/topic/' + data.topic.slug)
-						.setTitle(data.category.name + ': ' + data.topic.title)
-						.setDescription(content)
-						.setFooter(data.user.username, thumbnail)
-						.setTimestamp();
-
-					// Send notification:
-					if (hook) {
-						hook.send(messageContent, {embeds: [embed]}).catch(console.error);
-					}
-				}
-			});
 		}
-	},
+	}
+};
 
-	plugin.addAdminMenu = function(header, callback) {
-		translator.translate('[[discord-notification:title]]', function(title) {
-			header.plugins.push({
-				route : '/plugins/discord-notification',
-				icon  : 'fa-bell',
-				name  : title
-			});
+plugin.addAdminMenu = async function (header) {
+	header.plugins.push({
+		route: '/plugins/discord-notification',
+		icon: 'fa-bell',
+		name: 'Discord Notifications',
+	});
 
-			callback(null, header);
-		});
-	};
-
-	module.exports = plugin;
-
-}(module));
+	return header;
+};
