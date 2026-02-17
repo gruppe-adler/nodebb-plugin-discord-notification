@@ -87,7 +87,7 @@ async function reloadConfig() {
 	}
 
 	// Fallback: manual regex parsing (handles discordapp.com and other edge cases)
-	const match = webhookURL.match(/https?:\/\/discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/([0-9]+)\/([A-Za-z0-9_-]+)/);
+	const match = webhookURL.match(/https?:\/\/discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/([0-9]+)\/([A-Za-z0-9_-]{50,})/);
 	if (match) {
 		try {
 			hook = new WebhookClient({ id: match[1], token: match[2] });
@@ -112,7 +112,7 @@ plugin.init = async function (params) {
 plugin.postSave = async function (data) {
 	try {
 		// Reload settings (cached by NodeBB, so very fast) to pick up
-		// any configuration changes made since the last NodeBB restart.
+		// any configuration changes made in the admin panel.
 		await reloadConfig();
 
 		const post = data.post;
