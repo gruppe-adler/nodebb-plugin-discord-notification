@@ -1,11 +1,13 @@
 # Discord Notifications for NodeBB
 
-[![npm](https://img.shields.io/npm/v/nodebb-plugin-discord-notification.svg)](https://www.npmjs.com/package/nodebb-plugin-discord-notification) [![npm downloads](https://img.shields.io/npm/dt/nodebb-plugin-discord-notification.svg)](https://www.npmjs.com/package/nodebb-plugin-discord-notification) ![NodeBB Compatibility](https://packages.nodebb.org/api/v1/plugins/nodebb-plugin-discord-notification/compatibility.png)
+[![npm](https://img.shields.io/npm/v/nodebb-plugin-discord-notification-adler.svg)](https://www.npmjs.com/package/nodebb-plugin-discord-notification-adler) [![npm downloads](https://img.shields.io/npm/dt/nodebb-plugin-discord-notification-adler.svg)](https://www.npmjs.com/package/nodebb-plugin-discord-notification-adler) ![NodeBB Compatibility](https://packages.nodebb.org/api/v1/plugins/nodebb-plugin-discord-notification-adler/compatibility.png)
 
 Send notifications of new posts and topics via [Discord](https://discord.com/) webhook.
 
 It’s like [NodeBB Slack](https://github.com/pichalite/nodebb-plugin-slack-extended) plugin, but for Discord. Fancy rich embeds included.
+## Credits
 
+This is a fork of the [original plugin](https://github.com/amargon/nodebb-plugin-discord-notification) by [Amargon](https://github.com/amargon/).
 ## Configuration
 
 1. Install the plugin and activate it.
