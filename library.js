@@ -45,57 +45,73 @@ plugin.init = async function (params) {
 };
 
 plugin.postSave = async function (data) {
-	const post = data.post;
-	const topicsOnly = plugin.config.topicsOnly || 'off';
+	try {
+		const post = data.post;
+		const topicsOnly = plugin.config.topicsOnly || 'off';
 
-	if (topicsOnly === 'off' || (topicsOnly === 'on' && post.isMain)) {
-		let content = post.content;
+		if (topicsOnly === 'off' || (topicsOnly === 'on' && post.isMain)) {
+			let content = post.content;
 
-		const [userData, topicData, categoryData] = await Promise.all([
-			user.getUserFields(post.uid, ['username', 'picture']),
-			topics.getTopicFields(post.tid, ['title', 'slug']),
-			categories.getCategoryFields(post.cid, ['name', 'bgColor']),
-		]);
+			const [userData, topicData, categoryData] = await Promise.all([
+				user.getUserFields(post.uid, ['username', 'picture']),
+				topics.getTopicFields(post.tid, ['title', 'slug']),
+				categories.getCategoryFields(post.cid, ['name', 'bgColor']),
+			]);
 
-		let postCategories;
-		try {
-			postCategories = JSON.parse(plugin.config.postCategories);
-		} catch (e) {
-			console.error('[discord-notification] Failed to parse postCategories:', e.message);
-			postCategories = null;
-		}
-
-		if (!postCategories || postCategories.indexOf(String(post.cid)) >= 0) {
-			// Trim long posts:
-			const maxQuoteLength = plugin.config.maxLength || 1024;
-			if (content.length > maxQuoteLength) { content = content.substring(0, maxQuoteLength) + '...'; }
-
-			// Ensure absolute thumbnail URL if an avatar exists:
-			let thumbnail = null;
-
-			if (userData.picture && userData.picture.match(/^\//)) {
-				thumbnail = forumURL + userData.picture;
-			} else if (userData.picture) {
-				thumbnail = userData.picture;
+			let postCategories;
+			try {
+				postCategories = JSON.parse(plugin.config.postCategories);
+			} catch (e) {
+				postCategories = null;
 			}
 
-			// Add custom message:
-			const messageContent = plugin.config.messageContent || '';
+			if (!postCategories || postCategories.indexOf(String(post.cid)) >= 0) {
+				// Trim long posts:
+				const maxQuoteLength = plugin.config.maxLength || 1024;
+				if (content && content.length > maxQuoteLength) { content = content.substring(0, maxQuoteLength) + '...'; }
 
-			// Make the rich embed:
-			const embed = new EmbedBuilder()
-				.setColor(categoryData.bgColor)
-				.setURL(forumURL + '/topic/' + topicData.slug)
-				.setTitle(categoryData.name + ': ' + topicData.title)
-				.setDescription(content)
-				.setFooter({ text: userData.username, iconURL: thumbnail })
-				.setTimestamp();
+				// Ensure absolute thumbnail URL if an avatar exists:
+				let thumbnail = null;
 
-			// Send notification:
-			if (hook) {
-				hook.send({ content: messageContent || undefined, embeds: [embed] }).catch(console.error);
+				if (userData.picture && userData.picture.match(/^\//)) {
+					thumbnail = forumURL + userData.picture;
+				} else if (userData.picture) {
+					thumbnail = userData.picture;
+				}
+
+				// Add custom message:
+				const messageContent = plugin.config.messageContent || '';
+
+				// Make the rich embed:
+				const embed = new EmbedBuilder()
+					.setURL(forumURL + '/topic/' + topicData.slug)
+					.setTimestamp();
+
+				if (categoryData.bgColor) {
+					embed.setColor(categoryData.bgColor);
+				}
+
+				const title = (categoryData.name || '') + ': ' + (topicData.title || '');
+				embed.setTitle(title.substring(0, 256));
+
+				if (content) {
+					embed.setDescription(content.substring(0, 4096));
+				}
+
+				if (userData.username) {
+					embed.setFooter({ text: userData.username, iconURL: thumbnail || undefined });
+				}
+
+				// Send notification:
+				if (hook) {
+					hook.send({ content: messageContent || undefined, embeds: [embed] }).catch(function (err) {
+						console.error('[discord-notification] Error sending webhook:', err);
+					});
+				}
 			}
 		}
+	} catch (err) {
+		console.error('[discord-notification] Error in postSave:', err);
 	}
 };
 

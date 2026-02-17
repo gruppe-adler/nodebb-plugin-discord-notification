@@ -4,7 +4,7 @@ define('admin/plugins/discord-notification', ['settings'], function (Settings) {
 	const ACP = {};
 
 	ACP.init = function () {
-		socket.emit('admin.categories.getAll', function (err, data) {
+		socket.emit('admin.categories.getNames', function (err, data) {
 			if (err || !data) {
 				return;
 			}
