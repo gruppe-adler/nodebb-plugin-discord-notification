@@ -1,8 +1,8 @@
 {
-  "name": "nodebb-plugin-discord-notification",
+  "name": "nodebb-plugin-discord-notification-adler",
   "title": "Discord Notifications for NodeBB",
-  "version": "1.5.0",
-  "description": "Send notifications of new posts and topics via Discord webhook.",
+  "version": "1.0.0",
+  "description": "Send notifications of new posts and topics via Discord webhook. Based on a plugin by @Amargon.",
   "keywords": [
     "discord",
     "nodebb",
@@ -11,15 +11,15 @@
     "notifications"
   ],
   "author": {
-    "name": "Amargon",
-    "url": "https://github.com/amargon/"
+    "name": "nomisum",
+    "url": "https://github.com/gruppe-adler/"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/amargon/nodebb-plugin-discord-notification"
+    "url": "https://github.com/gruppe-adler/nodebb-plugin-discord-notification-adler"
   },
   "bugs": {
-    "url": "https://github.com/amargon/nodebb-plugin-discord-notification/issues"
+    "url": "https://github.com/gruppe-adler/nodebb-plugin-discord-notification-adler/issues"
   },
   "license": "MIT",
   "main": "library.js",
