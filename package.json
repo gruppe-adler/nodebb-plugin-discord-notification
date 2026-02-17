@@ -1,7 +1,7 @@
 {
   "name": "nodebb-plugin-discord-notification-adler",
   "title": "Discord Notifications for NodeBB",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Send notifications of new posts and topics via Discord webhook. Based on a plugin by @Amargon.",
   "keywords": [
     "discord",
