@@ -11,6 +11,7 @@ const winston = require.main.require('winston');
 const { WebhookClient, EmbedBuilder } = require('discord.js');
 
 let hook = null;
+let lastWebhookURL = '';
 const forumURL = nconf.get('url');
 
 const plugin = module.exports;
@@ -22,8 +23,6 @@ plugin.config = {
 	topicsOnly: '',
 	messageContent: '',
 };
-
-plugin.regex = /https:\/\/discord(?:app)?\.com\/api\/webhooks\/([0-9]+?)\/(.+?)$/;
 
 /**
  * Normalize a CSS hex color to 6-digit format for discord.js compatibility.
@@ -50,11 +49,12 @@ function normalizeColor(color) {
 	return null;
 }
 
-plugin.init = async function (params) {
-	routeHelpers.setupAdminPageRoute(params.router, '/admin/plugins/discord-notification', function (req, res) {
-		res.render('admin/plugins/discord-notification', {});
-	});
-
+/**
+ * Load settings from the database and (re-)initialize the webhook client
+ * if the webhook URL has changed. Settings are cached by NodeBB so this
+ * is safe to call frequently without database overhead.
+ */
+async function reloadConfig() {
 	const settings = await meta.settings.get('discord-notification');
 	for (const prop in plugin.config) {
 		if (settings.hasOwnProperty(prop)) {
@@ -62,35 +62,67 @@ plugin.init = async function (params) {
 		}
 	}
 
-	// Parse Webhook URL (1: ID, 2: Token)
 	const webhookURL = (plugin.config.webhookURL || '').trim();
-	const match = webhookURL.match(plugin.regex);
 
+	// Only recreate the WebhookClient if the URL has changed
+	if (webhookURL === lastWebhookURL) {
+		return;
+	}
+
+	lastWebhookURL = webhookURL;
+	hook = null;
+
+	if (!webhookURL) {
+		winston.info('[discord-notification] No webhook URL configured. Notifications disabled.');
+		return;
+	}
+
+	// Try discord.js built-in URL parsing first (handles discord.com, ptb, canary)
+	try {
+		hook = new WebhookClient({ url: webhookURL });
+		winston.info('[discord-notification] Webhook client initialized via URL.');
+		return;
+	} catch (e) {
+		winston.verbose('[discord-notification] discord.js URL parsing failed: ' + e.message);
+	}
+
+	// Fallback: manual regex parsing (handles discordapp.com and other edge cases)
+	const match = webhookURL.match(/https?:\/\/discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/([0-9]+)\/([A-Za-z0-9_-]+)/);
 	if (match) {
-		hook = new WebhookClient({ id: match[1], token: match[2] });
-		winston.info('[discord-notification] Webhook client initialized successfully.');
-	} else {
-		hook = null;
-		if (webhookURL) {
-			winston.warn('[discord-notification] Invalid webhook URL format. Notifications will not be sent. URL: ' + webhookURL.substring(0, 50) + (webhookURL.length > 50 ? '...' : ''));
-		} else {
-			winston.info('[discord-notification] No webhook URL configured. Notifications disabled.');
+		try {
+			hook = new WebhookClient({ id: match[1], token: match[2] });
+			winston.info('[discord-notification] Webhook client initialized via regex fallback.');
+			return;
+		} catch (e) {
+			winston.error('[discord-notification] Failed to create WebhookClient: ' + e.message);
 		}
 	}
+
+	winston.warn('[discord-notification] Invalid webhook URL. Notifications will not be sent.');
+}
+
+plugin.init = async function (params) {
+	routeHelpers.setupAdminPageRoute(params.router, '/admin/plugins/discord-notification', function (req, res) {
+		res.render('admin/plugins/discord-notification', {});
+	});
+
+	await reloadConfig();
 };
 
 plugin.postSave = async function (data) {
 	try {
+		// Reload settings (cached by NodeBB, so very fast) to pick up
+		// any configuration changes made since the last NodeBB restart.
+		await reloadConfig();
+
 		const post = data.post;
 		const topicsOnly = plugin.config.topicsOnly || 'off';
 
 		if (!hook) {
-			winston.verbose('[discord-notification] postSave: No webhook configured, skipping.');
 			return;
 		}
 
 		if (topicsOnly === 'on' && !post.isMain) {
-			winston.verbose('[discord-notification] postSave: Topics-only mode, skipping reply (pid: ' + post.pid + ').');
 			return;
 		}
 
@@ -112,7 +144,6 @@ plugin.postSave = async function (data) {
 		// Empty array or null/undefined means "all categories"
 		// Skip only if specific categories are configured and this post's category is not among them
 		if (Array.isArray(postCategories) && postCategories.length > 0 && postCategories.indexOf(String(post.cid)) < 0) {
-			winston.verbose('[discord-notification] postSave: Category ' + post.cid + ' not in allowed list, skipping.');
 			return;
 		}
 
@@ -159,7 +190,6 @@ plugin.postSave = async function (data) {
 		}
 
 		// Send notification:
-		winston.verbose('[discord-notification] Sending notification for pid: ' + post.pid + ', topic: ' + topicData.title);
 		hook.send({ content: messageContent || undefined, embeds: [embed] }).catch(function (err) {
 			winston.error('[discord-notification] Error sending webhook: ' + err.message);
 		});
