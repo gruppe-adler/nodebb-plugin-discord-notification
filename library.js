@@ -62,6 +62,7 @@ plugin.postSave = async function (data) {
 			try {
 				postCategories = JSON.parse(plugin.config.postCategories);
 			} catch (e) {
+				console.error('[discord-notification] Failed to parse postCategories:', e.message);
 				postCategories = null;
 			}
 
@@ -91,7 +92,12 @@ plugin.postSave = async function (data) {
 					embed.setColor(categoryData.bgColor);
 				}
 
-				const title = (categoryData.name || '') + ': ' + (topicData.title || '');
+				let title = '';
+				if (categoryData.name && topicData.title) {
+					title = categoryData.name + ': ' + topicData.title;
+				} else {
+					title = categoryData.name || topicData.title || 'New Post';
+				}
 				embed.setTitle(title.substring(0, 256));
 
 				if (content) {
