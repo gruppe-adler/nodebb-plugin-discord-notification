@@ -44,8 +44,8 @@ plugin.init = async function (params) {
 	}
 };
 
-plugin.postSave = async function (post) {
-	post = post.post;
+plugin.postSave = async function (data) {
+	const post = data.post;
 	const topicsOnly = plugin.config.topicsOnly || 'off';
 
 	if (topicsOnly === 'off' || (topicsOnly === 'on' && post.isMain)) {
@@ -61,6 +61,7 @@ plugin.postSave = async function (post) {
 		try {
 			postCategories = JSON.parse(plugin.config.postCategories);
 		} catch (e) {
+			console.error('[discord-notification] Failed to parse postCategories:', e.message);
 			postCategories = null;
 		}
 

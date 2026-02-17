@@ -8,9 +8,9 @@ define('admin/plugins/discord-notification', ['settings'], function (Settings) {
 			if (err || !data) {
 				return;
 			}
-			var categories = data;
-			for (var i = 0; i < categories.length; ++i) {
-				$('#postCategories').append('<option value=' + categories[i].cid + '>' + categories[i].name + '</option>');
+			const allCategories = data;
+			for (let i = 0; i < allCategories.length; ++i) {
+				$('#postCategories').append('<option value=' + allCategories[i].cid + '>' + allCategories[i].name + '</option>');
 			}
 		});
 
